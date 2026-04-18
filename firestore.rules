@@ -1,0 +1,78 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: orders
+    // Document ID: {orderId}
+    // Fields:
+    //   - id: string (required)
+    //   - name: string (required, 2-100 chars)
+    //   - email: string (required, valid email)
+    //   - phone: string (required, 11-15 chars)
+    //   - transactionId: string (required, 8-20 chars)
+    //   - status: string (required, ['pending', 'approved', 'rejected'])
+    //   - createdAt: number (required)
+    //   - approvedAt: number (optional)
+    //   - driveAccess: bool (optional)
+    //   - emailSent: bool (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || 
+         request.auth.token.email == "shojol.admin@socialmediapartner.com");
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll(['id', 'name', 'email', 'phone', 'transactionId', 'status', 'createdAt']) &&
+             data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+             isValidEmail(data.email) &&
+             data.phone is string && data.phone.size() >= 11 && data.phone.size() <= 15 &&
+             data.transactionId is string && data.transactionId.size() >= 8 && data.transactionId.size() <= 20 &&
+             data.status in ['pending', 'approved', 'rejected'] &&
+             data.createdAt is number;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /orders/{orderId} {
+      // Diagnostic mode: Allow any creation to see if it's a validation error or connection error
+      allow create: if true;
+      
+      // Only admins can read, update, or delete orders
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /reports/{reportId} {
+      // Anyone can submit a report/enquiry
+      allow create: if true; 
+      // Only admins can read or manage reports
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      // Users can read their own profile
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      // Only admins can write to user profiles (to set roles)
+      allow write: if isAdmin();
+    }
+  }
+}
