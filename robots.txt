@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://socialmediapartner.netlify.app/sitemap.xml
